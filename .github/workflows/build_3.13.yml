@@ -1,0 +1,28 @@
+name: Build OracleDB Layer (Thin, py313 x86_64)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-layer:
+    runs-on: ubuntu-latest
+    # Build inside Lambda's Python 3.13 image (AL2023)
+    container: public.ecr.aws/sam/build-python3.13
+
+    steps:
+      - name: Build layer
+        run: |
+          set -e
+          mkdir -p /asset/python /asset/out
+          python -m pip install --upgrade pip
+          # Install the cp313 manylinux wheel into top-level /python
+          pip install --only-binary=:all: -t /asset/python oracledb==3.4.0
+          # Optional: trim caches
+          find /asset/python -type d -name "__pycache__" -prune -exec rm -rf {} +
+          cd /asset && zip -r /asset/out/oracle_layer_py313_x86_64.zip python
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: oracle_layer_py313_x86_64
+          path: /asset/out/oracle_layer_py313_x86_64.zip
