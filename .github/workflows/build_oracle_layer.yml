@@ -1,25 +1,105 @@
-name: Build OracleDB Lambda Layer (Thin mode)
+name: Build verified OracleDB Thin Layer
 
 on:
   workflow_dispatch:
 
 jobs:
-  build-layer:
+  # ---- Python 3.12, x86_64 (AL2023) ----
+  build-py312-x86_64:
     runs-on: ubuntu-latest
-    container: public.ecr.aws/sam/build-python3.12  # Matches Lambda runtime
-
+    container: public.ecr.aws/sam/build-python3.12  # matches Lambda runtime
     steps:
-      - name: Build layer
+      - name: Prepare workspace
         run: |
           set -e
-          mkdir -p /asset/python /asset/out
+          mkdir -p /asset/python /asset/out /wheels
           python -m pip install --upgrade pip
-          pip install --only-binary=:all: -t /asset/python oracledb==3.4.0
-          find /asset/python -type d -name "__pycache__" -prune -exec rm -rf {} +
-          cd /asset && zip -r /asset/out/oracle_layer.zip python
+
+      - name: Download exact wheel (x86_64)
+        run: |
+          set -e
+          pip download \
+            --only-binary=:all: \
+            --platform manylinux2014_x86_64 \
+            --implementation cp \
+            --python-version 3.12 \
+            --abi cp312 \
+            -d /wheels \
+            oracledb==3.4.0
+
+      - name: Install from local wheel into layer folder
+        run: |
+          set -e
+          python -m pip install --no-index --find-links /wheels -t /asset/python oracledb==3.4.0
+
+      - name: Verify package contents
+        run: |
+          set -e
+          python - <<'PY'
+import sys, os, pkgutil, pathlib
+sys.path.insert(0, "/asset/python")
+import oracledb
+print("oracledb file:", oracledb.__file__)
+p = pathlib.Path(oracledb.__file__).parent
+print("contains:", sorted([x.name for x in p.iterdir()])[:50])
+need = {"base_impl.py","thin_impl.py","thick_impl.py","__init__.py"}
+have = set(x.name for x in p.iterdir())
+missing = sorted(list(need - have))
+assert not missing, f"Missing expected files: {missing}"
+PY
+
+      - name: Zip layer
+        run: |
+          cd /asset && zip -r /asset/out/oracledb-thin-py312-x86_64.zip python
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: oracle_layer_py312
-          path: /asset/out/oracle_layer.zip
+          name: oracledb-thin-py312-x86_64
+          path: /asset/out/oracledb-thin-py312-x86_64.zip
+
+  # ---- Python 3.12, arm64 (Graviton) ----
+  build-py312-arm64:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Build layer from aarch64 wheel
+        run: |
+          set -e
+          mkdir -p wheelhouse python out
+          python -m pip install --upgrade pip
+          pip download \
+            --only-binary=:all: \
+            --platform manylinux2014_aarch64 \
+            --implementation cp \
+            --python-version 3.12 \
+            --abi cp312 \
+            -d wheelhouse \
+            oracledb==3.4.0
+          python -m pip install --no-index --find-links wheelhouse -t python oracledb==3.4.0
+
+          # Verify contents
+          python - <<'PY'
+import sys, os, pkgutil, pathlib
+sys.path.insert(0, "python")
+import oracledb
+print("oracledb file:", oracledb.__file__)
+p = pathlib.Path(oracledb.__file__).parent
+print("contains:", sorted([x.name for x in p.iterdir()])[:50])
+need = {"base_impl.py","thin_impl.py","thick_impl.py","__init__.py"}
+have = set(x.name for x in p.iterdir())
+missing = sorted(list(need - have))
+assert not missing, f"Missing expected files: {missing}"
+PY
+
+          zip -r out/oracledb-thin-py312-arm64.zip python
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: oracledb-thin-py312-arm64
+          path: out/oracledb-thin-py312-arm64.zip
