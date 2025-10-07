@@ -1,0 +1,29 @@
+name: Build OracleDB Layer (Thin, py312 x86_64)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-layer:
+    runs-on: ubuntu-latest
+
+    # Build inside the official Lambda/SAM image that matches Python 3.12 (AL2023)
+    container: public.ecr.aws/sam/build-python3.12
+
+    steps:
+      - name: Build Thin layer
+        run: |
+          set -euo pipefail
+          mkdir -p /asset/python /asset/out
+          python -m pip install --upgrade pip
+          # Install the manylinux wheel directly into the layer's python/ folder
+          pip install --only-binary=:all: -t /asset/python oracledb==3.4.0
+          # Optional clean-up
+          find /asset/python -type d -name '__pycache__' -prune -exec rm -rf {} +
+          cd /asset && zip -r /asset/out/oracle_layer_py312_x86_64.zip python
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: oracle_layer_py312_x86_64
+          path: /asset/out/oracle_layer_py312_x86_64.zip
