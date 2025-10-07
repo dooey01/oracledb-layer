@@ -1,4 +1,4 @@
-name: Build OracleDB Lambda Layer (x86_64, Thin)
+name: Build OracleDB Lambda Layer (Thin mode)
 
 on:
   workflow_dispatch:
@@ -6,19 +6,14 @@ on:
 jobs:
   build-layer:
     runs-on: ubuntu-latest
-    # Choose the image to match your Lambda runtime:
-    # Python 3.12 => AL2023
-    container: public.ecr.aws/sam/build-python3.12
-    # For Python 3.11 (AL2) use:
-    # container: public.ecr.aws/sam/build-python3.11
+    container: public.ecr.aws/sam/build-python3.12  # Matches Lambda runtime
 
     steps:
-      - name: Build Thin layer in Lambda build image
+      - name: Build layer
         run: |
           set -e
           mkdir -p /asset/python /asset/out
           python -m pip install --upgrade pip
-          # Use manylinux wheel; do NOT build from source
           pip install --only-binary=:all: -t /asset/python oracledb==3.4.0
           find /asset/python -type d -name "__pycache__" -prune -exec rm -rf {} +
           cd /asset && zip -r /asset/out/oracle_layer.zip python
@@ -26,5 +21,5 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: oracle_layer_x86_64_py312  # or _py311 for 3.11
+          name: oracle_layer_py312
           path: /asset/out/oracle_layer.zip
