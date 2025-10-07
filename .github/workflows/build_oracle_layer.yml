@@ -1,4 +1,4 @@
-name: Build OracleDB Lambda Layer
+name: Build OracleDB Lambda Layer (x86_64)
 
 on:
   workflow_dispatch:
@@ -8,22 +8,23 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - name: Set up Python (match your Lambda runtime!)
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.11' # or '3.12' to match your Lambda
 
-      - name: Install dependencies
+      - name: Build layer (Thin mode; wheel only)
         run: |
+          set -e
           python -m pip install --upgrade pip
-          pip install oracledb==3.4.0 --no-binary :all: --target python
-
-      - name: Zip the layer
-        run: |
-          zip -r9 oracle_layer.zip python
+          # Use the prebuilt manylinux wheel, do NOT build from source
+          pip install --only-binary=:all: -t python oracledb==3.4.0
+          # Trim caches
+          find python -type d -name "__pycache__" -prune -exec rm -rf {} +
+          zip -r9 oracle_layer_py311_x86_64.zip python
 
       - name: Upload layer artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: oracle_layer
-          path: oracle_layer.zip
+          name: oracle_layer_py311_x86_64
+          path: oracle_layer_py311_x86_64.zip
