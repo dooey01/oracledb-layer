@@ -6,26 +6,21 @@ on:
 jobs:
   build-layer:
     runs-on: ubuntu-latest
-    container:
-      image: public.ecr.aws/amazonlinux/amazonlinux:2
 
     steps:
-      - name: Install system dependencies
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
         run: |
-          yum install -y python3 zip gcc gcc-c++ make
-          python3 -m ensurepip
-          python3 -m pip install --upgrade pip setuptools wheel
-
-      - name: Create build directory
-        run: mkdir -p layer/python
-
-      - name: Install oracledb into layer
-        run: pip3 install oracledb==3.4.0 --no-binary :all: --target layer/python
+          python -m pip install --upgrade pip
+          pip install oracledb==3.4.0 --no-binary :all: --target python
 
       - name: Zip the layer
         run: |
-          cd layer
-          zip -r9 ../oracle_layer.zip python
+          zip -r9 oracle_layer.zip python
 
       - name: Upload layer artifact
         uses: actions/upload-artifact@v3
